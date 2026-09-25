@@ -44,7 +44,7 @@ button:disabled {
   font-size: 13px;
 }
 
-.nav button {
+.nav button, .nav-home {
   display: block;
   width: 100%;
   text-align: left;
@@ -53,6 +53,7 @@ button:disabled {
   padding: 10px 8px;
   border-radius: 8px;
   color: #222;
+  text-decoration: none;
 }
 
 .nav button.active {
@@ -257,6 +258,124 @@ input[type="text"], input[type="number"], input[type="date"], select {
   color: #b0b0b0;
   font-size: 14px;
   padding: 6px;
+  text-decoration: none;
+}
+
+.adult-link.adult-next {
+  left: 78px;
+}
+
+.landing {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background: #ffffff;
+  padding: 32px 16px;
+}
+
+.landing h1 {
+  font-weight: 560;
+  font-size: 40px;
+}
+
+.landing-choices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+}
+
+.landing-choices a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 240px;
+  height: 140px;
+  font-size: 32px;
+  font-weight: 650;
+  text-decoration: none;
+  color: #161616;
+  background: #ffffff;
+  border: 1px solid #e4e4e4;
+  border-radius: 16px;
+}
+
+.landing-choices a:hover {
+  background: #fafafa;
+}
+
+.write-box {
+  position: relative;
+  width: min(920px, 92vw);
+  margin-top: 36px;
+  background: #0b1f4b;
+  border-radius: 18px;
+}
+
+.write-mirror,
+.write-input {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 64px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  padding: 28px 32px;
+  margin: 0;
+  border: 0;
+  width: 100%;
+  min-height: 140px;
+  white-space: pre;
+}
+
+.write-input {
+  display: block;
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: transparent;
+  caret-color: #ffffff;
+  outline: none;
+  border-radius: 18px;
+}
+
+.write-mirror {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  color: #ffffff;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.write-mirror .wrong {
+  background: #ffe14a;
+  color: #1a1a1a;
+}
+
+.write-hint {
+  margin: 16px 0 0;
+  color: #8a6a00;
+  font-size: 18px;
+}
+
+.write-progress-link {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  border: 0;
+  background: transparent;
+  color: #b0b0b0;
+  font-size: 14px;
+  padding: 6px;
+}
+
+.write-page .write-progress {
+  padding: 72px 28px 48px;
+  max-width: 980px;
 }
 
 .stage {

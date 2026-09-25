@@ -16,14 +16,22 @@ const ui = {
   message: "",
   database: "",
   read: { phase: "idle", session: null, index: 0 },
+  write: { phase: "idle", session: null, index: 0, draft: "", sending: false },
   selectedWords: [],
   wordFilter: "",
 };
 
+function appMode() {
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (path.endsWith("/escribir")) return "escribir";
+  if (path.endsWith("/leer")) return "leer";
+  return "landing";
+}
+
 const app = document.querySelector("#app");
 
 document.addEventListener("keydown", (event) => {
-  if (ui.view !== "leer" || ui.read.phase !== "presenting") return;
+  if (appMode() !== "leer" || ui.view !== "leer" || ui.read.phase !== "presenting") return;
   if (event.target.matches("input, textarea, select")) return;
   if (event.key === "ArrowRight" || event.key === " ") {
     event.preventDefault();
@@ -105,6 +113,16 @@ async function go(view) {
 }
 
 async function render() {
+  const mode = appMode();
+  document.title = mode === "escribir" ? "Escribir" : mode === "leer" ? "Leer" : "Lectura";
+  if (mode === "landing") {
+    app.innerHTML = landingHtml();
+    return;
+  }
+  if (mode === "escribir") {
+    await renderWriting();
+    return;
+  }
   if (ui.view === "leer") {
     app.innerHTML = readView();
     bindRead();
@@ -133,7 +151,7 @@ function navHtml() {
     ([id, label]) =>
       `<button type="button" data-view="${id}" class="${id === ui.view ? "active" : ""}">${label}</button>`,
   ).join("");
-  return `<p>${escapeHtml(ui.database || "")}</p>${links}`;
+  return `<p>${escapeHtml(ui.database || "")}</p><a class="nav-home" href="/">Inicio</a>${links}`;
 }
 
 function banner(text) {
@@ -179,7 +197,8 @@ function readView() {
   }
   return `
     <section class="read">
-      <button type="button" class="adult-link" data-view="hoy">Adulto</button>
+      <a class="adult-link" href="/">Inicio</a>
+      <button type="button" class="adult-link adult-next" data-view="hoy">Adulto</button>
       ${banner()}
       ${stage}
       ${actions}
@@ -712,7 +731,7 @@ async function settingsHtml() {
     </div>
     <div class="danger">
       <h2>Acciones irreversibles</h2>
-      <p class="hint">Restablecer progreso borra sesiones, presentaciones y sets de esta base. Los Excel no se tocan.</p>
+      <p class="hint">Restablecer progreso borra sesiones, presentaciones, escrituras y sets de esta base. Los Excel no se tocan.</p>
       <label>Escribe REINICIAR para restablecer <input id="reset-text" type="text"></label>
       <button type="button" class="btn" data-action="reset">Restablecer progreso</button>
       <p class="hint">Recrear hace primero una copia, luego crea el esquema de nuevo y sincroniza el Excel.</p>
@@ -771,6 +790,241 @@ document.addEventListener("submit", (event) => {
   window.location.hash = params.toString();
   render();
 });
+
+function landingHtml() {
+  return `
+    <section class="landing">
+      <h1>¿Qué practicamos?</h1>
+      <div class="landing-choices">
+        <a href="/leer">Leer</a>
+        <a href="/escribir">Escribir</a>
+      </div>
+    </section>`;
+}
+
+function currentWrittenWord() {
+  const session = ui.write.session;
+  if (!session) return null;
+  return session.words[ui.write.index] || null;
+}
+
+function writeMarks(expected, attempt) {
+  const target = charsOf(expected);
+  return charsOf(attempt).map((char, index) => ({
+    char,
+    wrong: index >= target.length || char !== target[index],
+  }));
+}
+
+async function renderWriting() {
+  if (ui.write.phase === "progress") {
+    app.innerHTML = `
+      <section class="read write-page">
+        <a class="adult-link" href="/">Inicio</a>
+        <div class="write-progress" id="write-progress"><p>Cargando…</p></div>
+      </section>`;
+    try {
+      document.querySelector("#write-progress").innerHTML = await writingProgressHtml();
+      document.querySelector("[data-write='home']")?.addEventListener("click", () => {
+        ui.write.phase = "idle";
+        render();
+      });
+    } catch (error) {
+      document.querySelector("#write-progress").innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`;
+    }
+    return;
+  }
+  app.innerHTML = writeView();
+  bindWrite();
+}
+
+function writeView() {
+  const phase = ui.write.phase;
+  let stage = "";
+  let actions = "";
+  if (phase === "presenting" && ui.write.session) {
+    const session = ui.write.session;
+    const word = session.words[ui.write.index];
+    const size = fontSize(word.shown);
+    stage = `
+      <div class="stage">
+        <p class="word" style="font-size:${size}px"><span style="color:${RED}">${escapeHtml(word.shown)}</span></p>
+        <div class="write-box">
+          <div class="write-mirror" id="write-mirror"></div>
+          <input id="write-input" class="write-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Escribe la palabra">
+        </div>
+        <p class="write-hint" id="write-hint" hidden>Las letras amarillas no coinciden. Bórralas.</p>
+        <p class="progress">${ui.write.index + 1} / ${session.words.length}</p>
+      </div>`;
+  } else if (phase === "completed") {
+    stage = `<div class="stage"><h1 class="done-title">Set completado</h1></div>`;
+    actions = `
+      <div class="actions">
+        <button type="button" data-write="repeat">Escribir de nuevo</button>
+        <button type="button" data-write="next">Siguiente set</button>
+        <button type="button" data-write="home">Volver</button>
+      </div>`;
+  } else {
+    stage = `
+      <div class="stage">
+        <button type="button" class="btn primary" data-write="start">Escribir siguiente set</button>
+      </div>`;
+  }
+  const progressLink = phase === "presenting" ? "" : `<button type="button" class="write-progress-link" data-write="progress">Progreso</button>`;
+  return `
+    <section class="read">
+      <a class="adult-link" href="/">Inicio</a>
+      ${progressLink}
+      ${banner()}
+      ${stage}
+      ${actions}
+    </section>`;
+}
+
+function paintWriteMirror() {
+  const mirror = document.querySelector("#write-mirror");
+  const hint = document.querySelector("#write-hint");
+  const word = currentWrittenWord();
+  if (!mirror || !word) return;
+  const marks = writeMarks(word.shown, ui.write.draft);
+  mirror.innerHTML = marks
+    .map((mark) => {
+      const text = escapeHtml(mark.char);
+      return mark.wrong ? `<span class="wrong">${text}</span>` : text;
+    })
+    .join("");
+  if (hint) hint.hidden = !marks.some((mark) => mark.wrong);
+}
+
+function bindWrite() {
+  document.querySelector("[data-write='start']")?.addEventListener("click", () => startWriting({ kind: "next" }));
+  document.querySelector("[data-write='next']")?.addEventListener("click", () => {
+    const current = ui.write.session;
+    startWriting({ kind: "next", exclude_set_id: current ? current.set_id : null });
+  });
+  document.querySelector("[data-write='repeat']")?.addEventListener("click", () => {
+    const current = ui.write.session;
+    if (current) startWriting({ kind: "repeat", set_id: current.set_id });
+  });
+  document.querySelector("[data-write='home']")?.addEventListener("click", () => {
+    ui.write.phase = "idle";
+    ui.write.session = null;
+    ui.write.draft = "";
+    render();
+  });
+  document.querySelector("[data-write='progress']")?.addEventListener("click", () => {
+    ui.write.phase = "progress";
+    render();
+  });
+  const input = document.querySelector("#write-input");
+  if (!input) return;
+  input.value = ui.write.draft;
+  paintWriteMirror();
+  input.focus();
+  const onType = () => {
+    if (ui.write.sending) return;
+    ui.write.draft = input.value;
+    paintWriteMirror();
+    const word = currentWrittenWord();
+    if (word && word.shown && input.value === word.shown) submitWrite("correct");
+  };
+  input.addEventListener("input", (event) => {
+    if (event.isComposing) return;
+    onType();
+  });
+  input.addEventListener("compositionend", onType);
+  input.addEventListener("keydown", (event) => {
+    if (event.isComposing || event.key !== "Enter") return;
+    event.preventDefault();
+    if (ui.write.sending) return;
+    const word = currentWrittenWord();
+    if (!word) return;
+    if (input.value === word.shown && word.shown) submitWrite("correct");
+    else if (input.value.length) submitWrite("incorrect");
+  });
+}
+
+async function startWriting(body) {
+  ui.error = "";
+  try {
+    const session = await api("/api/writing/sessions", { method: "POST", body: JSON.stringify(body) });
+    ui.write.session = session;
+    ui.write.index = 0;
+    ui.write.phase = "presenting";
+    ui.write.draft = "";
+    ui.write.sending = false;
+    await render();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function submitWrite(result) {
+  if (ui.write.sending) return;
+  const session = ui.write.session;
+  const word = currentWrittenWord();
+  if (!session || !word) return;
+  const attempt = ui.write.draft;
+  if (result === "correct" && attempt !== word.shown) return;
+  if (result === "incorrect" && (!attempt || attempt === word.shown)) return;
+  const complete = result === "correct" && ui.write.index + 1 >= session.words.length;
+  ui.write.sending = true;
+  try {
+    await api(`/api/writing/sessions/${session.session_id}/attempt`, {
+      method: "POST",
+      body: JSON.stringify({
+        word_id: word.id,
+        set_id: session.set_id,
+        result,
+        attempt,
+        complete,
+      }),
+    });
+    if (result === "correct") {
+      ui.write.draft = "";
+      if (complete) ui.write.phase = "completed";
+      else ui.write.index += 1;
+    }
+    ui.write.sending = false;
+    await render();
+  } catch (error) {
+    ui.write.sending = false;
+    showError(error);
+  }
+}
+
+async function writingProgressHtml() {
+  const data = await api("/api/writing/progress");
+  const rows = data.words
+    .map(
+      (row) => `
+        <tr>
+          <td>${escapeHtml(row.word)}</td>
+          <td>${row.times_presented}</td>
+          <td>${row.correct_count}</td>
+          <td>${row.incorrect_count}</td>
+          <td>${escapeHtml(row.accuracy)}</td>
+        </tr>`,
+    )
+    .join("");
+  return `
+    <h1>Escritura</h1>
+    <div class="metrics">
+      <div class="metric"><span>Intentos</span><strong>${data.attempts}</strong></div>
+      <div class="metric"><span>Correctas</span><strong>${data.correct_count}</strong></div>
+      <div class="metric"><span>Incorrectas</span><strong>${data.incorrect_count}</strong></div>
+      <div class="metric"><span>Precisión</span><strong>${escapeHtml(data.accuracy)}</strong></div>
+    </div>
+    ${
+      rows
+        ? `<div class="table-wrap"><table>
+            <thead><tr><th>Palabra</th><th>Veces</th><th>Correctas</th><th>Incorrectas</th><th>Precisión</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table></div>`
+        : `<p class="empty">Todavía no hay escrituras guardadas.</p>`
+    }
+    <div class="row"><button type="button" class="btn" data-write="home">Volver</button></div>`;
+}
 
 async function boot() {
   try {

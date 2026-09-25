@@ -126,6 +126,8 @@ Los fallos no cambian el set Doman de una palabra. Suben un `reinforcement_score
 
 ## Pantalla del niño
 
+Al abrir la aplicación se elige **Leer** o **Escribir**. Cada una es su propia pantalla.
+
 La página **Leer** muestra la palabra, el avance `2 / 5` y los botones. No muestra porcentajes.
 
 Al terminar:
@@ -144,6 +146,12 @@ Tres modos visuales, todos con fondo blanco y letra grande:
 3. **Negro.** Sin realce.
 
 La mayúsculas se elige en Ajustes: Mayúsculas, Minúsculas o Como está escrito. Por defecto, minúsculas. Los acentos se conservan: `mamá` pasa a `MAMÁ`, `niño` a `NIÑO`.
+
+## Escribir
+
+**Escribir** usa los mismos sets activos y el mismo día del programa. La palabra sale en rojo. Debajo hay un recuadro azul oscuro: lo escrito se ve en blanco. Si coincide con la palabra, pasa sola a la siguiente y queda guardada como correcta. Si no coincide, las letras que sobran o no encajan se marcan en amarillo para borrarlas. Enter guarda ese intento como incorrecto y deja el texto para corregirlo.
+
+La escritura vive en tablas propias de la misma base SQLite (`writing_sessions`, `writing_presentations`, `writing_word_stats`). No suma lecturas correctas ni incorrectas, no cambia la precisión de lectura y no cuenta para la retirada. El turno de escritura rota por sus propias sesiones, aparte del turno de lectura.
 
 ## Bases de datos / perfiles
 
@@ -179,7 +187,7 @@ lectura_default_backup_2026-09-21_1630.db
 
 ### Restablecer progreso
 
-Borra el día, los sets, las sesiones, las presentaciones y las estadísticas de la base actual, y vuelve a abrir el día 1. No borra los Excel. Hay que escribir `REINICIAR`. Los ajustes (palabras por set, modos de pantalla, etc.) se conservan.
+Borra el día, los sets, las sesiones, las presentaciones, las escrituras y las estadísticas de la base actual, y vuelve a abrir el día 1. No borra los Excel. Hay que escribir `REINICIAR`. Los ajustes (palabras por set, modos de pantalla, etc.) se conservan.
 
 ### Borrar una base
 
@@ -233,7 +241,9 @@ La sincronización añade o actualiza palabras. No reconstruye sola el historial
 
 ## Páginas
 
+- **Inicio.** Elige Leer o Escribir.
 - **Leer.** La palabra y los botones.
+- **Escribir.** La palabra en rojo y el recuadro para copiarla. El progreso de escritura está en esa misma pantalla, aparte del de lectura.
 - **Programa de hoy.** Día, sets activos, cuántas veces se ha presentado cada set hoy y en total, aviso de retirada, refuerzo y presentación libre.
 - **Progreso.** Totales y tabla por palabra. La precisión evaluada ignora las exposiciones neutras.
 - **Historial.** Por fecha, día del programa, set o palabra.
@@ -256,6 +266,7 @@ src/database.py             esquema SQLite
 src/word_loader.py          lectura del Excel
 src/display.py              tamaño, color y mayúsculas
 src/statistics.py           precisión e informes
+src/writing.py              sesiones de escritura, aparte de la lectura
 data/                       Excel, bases y copias
 ```
 

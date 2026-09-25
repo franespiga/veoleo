@@ -1,7 +1,8 @@
 """SQLite schema and programme persistence.
 
-Each database file is one reading profile. Connections are short-lived and
-multi-step changes run inside a single transaction.
+Each database file is one profile. Reading and writing share the vocabulary
+and the sets, and keep their sessions in separate tables. Connections are
+short-lived and multi-step changes run inside a single transaction.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from src.models import (
 )
 from src.statistics import apply_result
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -131,6 +132,43 @@ CREATE INDEX IF NOT EXISTS idx_words_state ON words(state);
 CREATE INDEX IF NOT EXISTS idx_sets_state ON word_sets(state, kind, sort_order);
 """
 
+WRITING_SQL = """
+CREATE TABLE IF NOT EXISTS writing_sessions (
+    id INTEGER PRIMARY KEY,
+    set_id INTEGER REFERENCES word_sets(id),
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    programme_day INTEGER NOT NULL,
+    session_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS writing_presentations (
+    id INTEGER PRIMARY KEY,
+    session_id INTEGER NOT NULL REFERENCES writing_sessions(id),
+    word_id INTEGER NOT NULL REFERENCES words(id),
+    set_id INTEGER REFERENCES word_sets(id),
+    timestamp TEXT NOT NULL,
+    programme_day INTEGER NOT NULL,
+    case_mode TEXT NOT NULL,
+    result TEXT NOT NULL CHECK (result IN ('correct', 'incorrect')),
+    attempt TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS writing_word_stats (
+    word_id INTEGER PRIMARY KEY REFERENCES words(id),
+    times_presented INTEGER NOT NULL DEFAULT 0,
+    correct_count INTEGER NOT NULL DEFAULT 0,
+    incorrect_count INTEGER NOT NULL DEFAULT 0,
+    last_presented TEXT,
+    last_correct TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_writing_presentations_word ON writing_presentations(word_id);
+CREATE INDEX IF NOT EXISTS idx_writing_sessions_set ON writing_sessions(set_id, programme_day);
+"""
+
+SCHEMA_SQL = SCHEMA_SQL + WRITING_SQL
+
 
 def utc_now() -> str:
     return datetime.now().replace(microsecond=0).isoformat(timespec="seconds")
@@ -165,6 +203,13 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
     """Create the schema if this database is new. Existing data is left intact."""
     row = _schema_version(conn)
     if row == SCHEMA_VERSION:
+        return
+    if row == "1":
+        conn.executescript(WRITING_SQL)
+        conn.execute(
+            "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
+            (SCHEMA_VERSION,),
+        )
         return
     if row is not None:
         raise RuntimeError(f"Versión de esquema no soportada: {row}")
@@ -392,6 +437,9 @@ def record_presentation(
 
 def clear_programme_progress(conn: sqlite3.Connection) -> None:
     """Remove progress and sets. Vocabulary rows are removed so Excel can be re-synced."""
+    conn.execute("DELETE FROM writing_presentations")
+    conn.execute("DELETE FROM writing_sessions")
+    conn.execute("DELETE FROM writing_word_stats")
     conn.execute("DELETE FROM presentations")
     conn.execute("DELETE FROM sessions")
     conn.execute("DELETE FROM set_words")

@@ -34,6 +34,13 @@ from src.doman_scheduler import (
 )
 from src.models import SESSION_MANUAL, SESSION_NORMAL, SESSION_REINFORCEMENT
 from src.statistics import history_rows, progress_summary, word_progress_rows
+from src.writing import (
+    choose_next_writing_set,
+    record_writing_attempt,
+    start_writing_session,
+    writing_progress,
+    writing_session_payload,
+)
 
 router = APIRouter()
 
@@ -52,6 +59,20 @@ class PresentBody(BaseModel):
     word_id: int
     set_id: int | None = None
     result: str
+    complete: bool = False
+
+
+class WritingSessionBody(BaseModel):
+    kind: str
+    set_id: int | None = None
+    exclude_set_id: int | None = None
+
+
+class WritingAttemptBody(BaseModel):
+    word_id: int
+    set_id: int
+    result: str
+    attempt: str
     complete: bool = False
 
 
@@ -488,6 +509,47 @@ def recreate(body: ConfirmBody) -> dict:
     except DatabaseError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True}
+
+
+@router.post("/writing/sessions")
+def open_writing_session(body: WritingSessionBody) -> dict:
+    def start(conn):
+        if body.kind == "next":
+            set_id = choose_next_writing_set(conn, exclude_set_id=body.exclude_set_id)
+            if set_id is None:
+                raise ValueError("No hay un set activo para escribir.")
+        elif body.kind == "repeat":
+            if body.set_id is None:
+                raise ValueError("Falta el set.")
+            set_id = body.set_id
+        else:
+            raise ValueError("No se reconoce esa presentación.")
+        session_id = start_writing_session(conn, set_id)
+        return writing_session_payload(conn, session_id, set_id)
+
+    return _call(start)
+
+
+@router.post("/writing/sessions/{session_id}/attempt")
+def write_attempt(session_id: int, body: WritingAttemptBody) -> dict:
+    def save(conn):
+        record_writing_attempt(
+            conn,
+            session_id=session_id,
+            word_id=body.word_id,
+            set_id=body.set_id,
+            result=body.result,
+            attempt=body.attempt,
+            complete=body.complete,
+        )
+        return {"ok": True}
+
+    return _call(save)
+
+
+@router.get("/writing/progress")
+def writing_progress_view() -> dict:
+    return _call(writing_progress)
 
 
 @router.post("/databases/delete")

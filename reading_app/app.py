@@ -26,9 +26,23 @@ app.include_router(router, prefix="/api")
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 
 
-@app.get("/")
-def index() -> FileResponse:
+def _page() -> FileResponse:
     return FileResponse(WEB / "index.html")
+
+
+@app.get("/")
+def landing() -> FileResponse:
+    return _page()
+
+
+@app.get("/leer")
+def reading() -> FileResponse:
+    return _page()
+
+
+@app.get("/escribir")
+def writing() -> FileResponse:
+    return _page()
 
 
 if __name__ == "__main__":
