@@ -169,10 +169,9 @@ function readView() {
   if (phase === "presenting" && ui.read.session) {
     const session = ui.read.session;
     const word = session.words[ui.read.index];
-    const size = fontSize(applyCase(word.word, session.case_mode));
     stage = `
       <div class="stage">
-        <p class="word" style="font-size:${size}px">${wordHtml(word.word, session.display_mode, session.case_mode)}</p>
+        <p class="word" style="font-size:150px">${wordHtml(word.word, session.display_mode, session.case_mode)}</p>
         <p class="progress">${ui.read.index + 1} / ${session.words.length}</p>
       </div>
       ${session.presentation_mode === "presentacion" ? '<p class="mode-note">Modo presentación. → muestra la palabra y no evalúa.</p>' : ""}
@@ -850,8 +849,8 @@ function writeView() {
       <div class="stage">
         <p class="word" style="font-size:${size}px"><span style="color:${RED}">${escapeHtml(word.shown)}</span></p>
         <div class="write-box">
-          <div class="write-mirror" id="write-mirror"></div>
           <input id="write-input" class="write-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Escribe la palabra">
+          <div class="write-mirror" id="write-mirror" aria-hidden="true"></div>
         </div>
         <p class="write-hint" id="write-hint" hidden>Las letras amarillas no coinciden. Bórralas.</p>
         <p class="progress">${ui.write.index + 1} / ${session.words.length}</p>

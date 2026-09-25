@@ -35,12 +35,8 @@ def central_letter(word: str) -> str:
 
 
 def font_size_px(word: str) -> int:
-    length = len(word)
-    if length <= 5:
-        return 150
-    if length <= 8:
-        return 124
-    return 100
+    """One size for every reading word. The screen has room for the larger size."""
+    return 150
 
 
 def render_word_html(word: str, display_mode: str, case_mode: str, progress_label: str | None = None) -> str:
